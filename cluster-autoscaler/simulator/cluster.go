@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"time"
 
 	kube_api "k8s.io/kubernetes/pkg/api"
@@ -39,6 +40,20 @@ var (
 	skipNodesWithLocalStorage = flag.Bool("skip-nodes-with-local-storage", true,
 		"If true cluster autoscaler will never delete nodes with pods with local storage, e.g. EmptyDir or HostPath")
 )
+
+type SortByMap struct {
+	Nodes []*kube_api.Node
+	Map map[string]int
+}
+func (s SortByMap) Len() int {
+    return len(s.Nodes)
+}
+func (s SortByMap) Swap(i, j int) {
+    s.Nodes[i], s.Nodes[j] = s.Nodes[j], s.Nodes[i]
+}
+func (s SortByMap) Less(i, j int) bool {
+    return s.Map[s.Nodes[i].Name] < s.Map[s.Nodes[j].Name]
+}
 
 // FindNodesToRemove finds nodes that can be removed. Returns also an information about good
 // rescheduling location for each of the pods.
@@ -61,6 +76,7 @@ func FindNodesToRemove(candidates []*kube_api.Node, allNodes []*kube_api.Node, p
 	}
 	newHints := make(map[string]string, len(oldHints))
 
+	numPodsToRemove := make(map[string]int, len(candidates))
 candidateloop:
 	for _, node := range candidates {
 		glog.V(2).Infof("%s: %s for removal", evaluationType, node.Name)
@@ -92,6 +108,7 @@ candidateloop:
 				podsToRemove = append(podsToRemove, &drainResult[i])
 			}
 		}
+		numPodsToRemove[node.Name] = len(podsToRemove)
 		findProblems := findPlaceFor(node.Name, podsToRemove, allNodes, nodeNameToNodeInfo, predicateChecker, oldHints, newHints,
 			usageTracker, timestamp)
 
@@ -105,6 +122,8 @@ candidateloop:
 			glog.V(2).Infof("%s: node %s is not suitable for removal %v", evaluationType, node.Name, err)
 		}
 	}
+
+	sort.Sort(SortByMap{result, numPodsToRemove})
 	return result, newHints, nil
 }
 
