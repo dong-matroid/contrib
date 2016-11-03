@@ -115,16 +115,22 @@ candidateloop:
 		if findProblems == nil {
 			result = append(result, node)
 			glog.V(2).Infof("%s: node %s may be removed", evaluationType, node.Name)
-			if len(result) >= maxCount {
-				break candidateloop
-			}
 		} else {
 			glog.V(2).Infof("%s: node %s is not suitable for removal %v", evaluationType, node.Name, err)
 		}
 	}
 
 	sort.Sort(SortByMap{result, numPodsToRemove})
-	return result, newHints, nil
+	glog.Warning("Info: FindNodesToRemove num of pods on node ", numPodsToRemove)
+	for index, node := range result {
+		glog.Warningf("Info: FindNodesToRemove index %v, node %v", index, node.Name)
+	}
+
+	if len(result) > maxCount {
+		return result[:maxCount], newHints, nil
+	} else {
+		return result, newHints, nil
+	}
 }
 
 // CalculateUtilization calculates utilization of a node, defined as total amount of requested resources divided by capacity.
