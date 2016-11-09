@@ -19,18 +19,21 @@ if [ -z "$FILES_TO_COLLECT" ]; then
   exit 0
 fi
 
+count=0
 for filepath in $FILES_TO_COLLECT
 do
-  filename=$(basename $filepath)
+  (( count++ ))
+  filename="$count"
   cat > "/etc/td-agent/files/${filename}" << EndOfMessage
 <source>
   type tail
   format none
+  message_key log
   time_key time
   path ${filepath}
   pos_file /etc/td-agent/fluentd-es.log.pos
   time_format %Y-%m-%dT%H:%M:%S
-  tag file.${filename}
+  tag file.*
   read_from_head true
 </source>
 EndOfMessage
