@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -49,6 +50,17 @@ type NodeToBeRemoved struct {
 	Node *apiv1.Node
 	// PodsToReschedule contains pods on the node that should be rescheduled elsewhere.
 	PodsToReschedule []*apiv1.Pod
+}
+
+type SortByMap []NodeToBeRemoved
+func (s SortByMap) Len() int {
+    return len(s)
+}
+func (s SortByMap) Swap(i, j int) {
+    s[i], s[j] = s[j], s[i]
+}
+func (s SortByMap) Less(i, j int) bool {
+	return len(s[i].PodsToReschedule) < len(s[j].PodsToReschedule)
 }
 
 // FindNodesToRemove finds nodes that can be removed. Returns also an information about good
@@ -101,14 +113,21 @@ candidateloop:
 				PodsToReschedule: podsToRemove,
 			})
 			glog.V(2).Infof("%s: node %s may be removed", evaluationType, node.Name)
-			if len(result) >= maxCount {
-				break candidateloop
-			}
 		} else {
 			glog.V(2).Infof("%s: node %s is not suitable for removal %v", evaluationType, node.Name, err)
 		}
 	}
-	return result, newHints, nil
+
+	sort.Sort(SortByMap(result))
+	for index, node := range result {
+		glog.Warningf("Info: FindNodesToRemove index %v, node %v, pod to remove %v", index, node.Node.Name, len(node.PodsToReschedule))
+	}
+
+	if len(result) > maxCount {
+		return result[:maxCount], newHints, nil
+	} else {
+		return result, newHints, nil
+	}
 }
 
 // FindEmptyNodesToRemove finds empty nodes that can be removed.
